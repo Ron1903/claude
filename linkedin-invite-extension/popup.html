@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      width: 300px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f2ef;
+      color: #333;
+      padding: 16px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 16px;
+      color: #0a66c2;
+      margin-bottom: 4px;
+    }
+    .header p {
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* Status banner */
+    .status-banner {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+    .status-banner.error {
+      background: #fce4e4;
+      color: #cc0000;
+      display: block;
+    }
+    .status-banner.success {
+      background: #e4f5e4;
+      color: #057642;
+      display: block;
+    }
+    .status-banner.info {
+      background: #e1ecf7;
+      color: #0a66c2;
+      display: block;
+    }
+
+    /* Options grid */
+    .options-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .option-btn {
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      transition: all 0.15s;
+    }
+    .option-btn:hover {
+      border-color: #0a66c2;
+      background: #e8f0fe;
+    }
+    .option-btn.selected {
+      border-color: #0a66c2;
+      background: #0a66c2;
+      color: white;
+    }
+
+    /* Custom input */
+    .custom-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .custom-row label {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .custom-row input {
+      flex: 1;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      text-align: center;
+      outline: none;
+    }
+    .custom-row input:focus {
+      border-color: #0a66c2;
+    }
+
+    /* Buttons */
+    .btn-start {
+      width: 100%;
+      padding: 12px;
+      background: #0a66c2;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-start:hover {
+      background: #004182;
+    }
+    .btn-start:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-stop {
+      width: 100%;
+      padding: 12px;
+      background: #cc0000;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: none;
+    }
+    .btn-stop:hover {
+      background: #990000;
+    }
+
+    /* Progress */
+    .progress-section {
+      display: none;
+      margin-top: 12px;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #0a66c2;
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .progress-text {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>LinkedIn Page Inviter</h1>
+    <p>הזמן אנשי קשר לעקוב אחרי העמוד העסקי שלך</p>
+  </div>
+
+  <div id="statusBanner" class="status-banner"></div>
+
+  <label class="options-label">כמה אנשים להזמין?</label>
+  <div class="options-grid">
+    <button class="option-btn" data-count="50">50</button>
+    <button class="option-btn" data-count="100">100</button>
+    <button class="option-btn selected" data-count="150">150</button>
+    <button class="option-btn" data-count="200">200</button>
+  </div>
+
+  <div class="custom-row">
+    <label>כמות מותאמת:</label>
+    <input type="number" id="customCount" min="1" max="1000" placeholder="הזן מספר...">
+  </div>
+
+  <button id="startBtn" class="btn-start">התחל להזמין</button>
+  <button id="stopBtn" class="btn-stop">עצור</button>
+
+  <div id="progressSection" class="progress-section">
+    <div class="progress-bar-bg">
+      <div id="progressFill" class="progress-bar-fill"></div>
+    </div>
+    <div id="progressText" class="progress-text"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
