@@ -63,73 +63,120 @@ function isModalOpen() {
     modal.innerText.toLowerCase().includes('invite');
 }
 
-// Find the scrollable container inside the invite modal
-function findScrollContainer() {
-  const selectors = [
-    '.artdeco-modal__content',
-    '.os-viewport',
-    '[role="dialog"] .overflow-y-auto',
-    '.invitee-picker__connection-list',
-    '.invitee-picker',
-    '.artdeco-modal .artdeco-modal__content'
-  ];
-  for (const sel of selectors) {
-    const el = document.querySelector(sel);
-    if (el && el.scrollHeight > el.clientHeight) {
-      return el;
-    }
-  }
-  // Fallback: find any scrollable element inside the modal
+// Find ALL scrollable elements inside the invite modal
+function findAllScrollContainers() {
   const modal = document.querySelector('.artdeco-modal, [role="dialog"]');
-  if (modal) {
-    const allDivs = modal.querySelectorAll('div');
-    for (const div of allDivs) {
-      if (div.scrollHeight > div.clientHeight + 50) {
-        return div;
-      }
+  if (!modal) return [];
+
+  const scrollables = [];
+  const allElements = modal.querySelectorAll('*');
+  for (const el of allElements) {
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY;
+    const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') &&
+      el.scrollHeight > el.clientHeight + 10;
+    if (isScrollable) {
+      scrollables.push(el);
     }
   }
-  return null;
+
+  // Sort by scrollHeight descending - the biggest scrollable area is most likely the list
+  scrollables.sort((a, b) => b.scrollHeight - a.scrollHeight);
+  return scrollables;
+}
+
+// Count how many invite-eligible rows exist
+function countInviteRows() {
+  return document.querySelectorAll(
+    '.invitee-picker-connections-result-item--can-invite'
+  ).length;
 }
 
 // Scroll the modal to load all connections
 async function scrollToLoadAll(maxInvites) {
-  const container = findScrollContainer();
-  if (!container) {
-    console.log('[LinkedIn Inviter] Could not find scroll container');
+  const containers = findAllScrollContainers();
+  if (containers.length === 0) {
+    console.log('[LinkedIn Inviter] Could not find any scroll container. Trying fallback...');
+    // Fallback: try the modal content directly
+    const fallback = document.querySelector('.artdeco-modal__content');
+    if (fallback) containers.push(fallback);
+  }
+
+  console.log(`[LinkedIn Inviter] Found ${containers.length} scrollable container(s)`);
+
+  // Try each scrollable container - the right one will cause item count to grow
+  let workingContainer = null;
+  const initialCount = countInviteRows();
+
+  for (const container of containers) {
+    container.scrollTop = container.scrollHeight;
+    await sleep(2000);
+    const newCount = countInviteRows();
+    if (newCount > initialCount) {
+      workingContainer = container;
+      console.log(`[LinkedIn Inviter] Found the right scroll container (${newCount} items after scroll)`);
+      break;
+    }
+    // Reset scroll
+    container.scrollTop = 0;
+  }
+
+  // If no container caused new items to load, use the largest one
+  if (!workingContainer && containers.length > 0) {
+    workingContainer = containers[0];
+    console.log('[LinkedIn Inviter] Using largest scrollable container as fallback');
+  }
+
+  if (!workingContainer) {
+    console.log('[LinkedIn Inviter] No scroll container found at all');
     return;
   }
 
-  console.log('[LinkedIn Inviter] Auto-scrolling to load connections...');
-  let previousHeight = 0;
-  let sameHeightCount = 0;
+  // Now scroll repeatedly until all items are loaded
+  console.log('[LinkedIn Inviter] Auto-scrolling to load all connections...');
+  let previousCount = countInviteRows();
+  let noChangeRounds = 0;
+  const MAX_NO_CHANGE = 8; // be patient - wait up to 8 rounds with no new items
 
-  while (sameHeightCount < 5 && !stopRequested) {
-    container.scrollTop = container.scrollHeight;
-    await sleep(1500);
+  while (noChangeRounds < MAX_NO_CHANGE && !stopRequested) {
+    // Scroll to bottom
+    workingContainer.scrollTop = workingContainer.scrollHeight;
+    await sleep(2000);
 
-    if (container.scrollHeight === previousHeight) {
-      sameHeightCount++;
-    } else {
-      sameHeightCount = 0;
-      previousHeight = container.scrollHeight;
+    // Also try scrolling the last visible item into view for lazy-load triggers
+    const allRows = document.querySelectorAll('.invitee-picker-connections-result-item--can-invite');
+    if (allRows.length > 0) {
+      allRows[allRows.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+      await sleep(1000);
     }
 
-    const loaded = document.querySelectorAll(
-      '.invitee-picker-connections-result-item--can-invite'
-    ).length;
-    sendProgress(loaded, maxInvites, 'גלילה');
-    console.log(`[LinkedIn Inviter] Scrolling... ${loaded} connections loaded`);
+    const currentCount = countInviteRows();
+    sendProgress(currentCount, maxInvites, 'גלילה');
+    console.log(`[LinkedIn Inviter] Scrolling... ${currentCount} connections loaded`);
+
+    if (currentCount === previousCount) {
+      noChangeRounds++;
+      // Try an extra nudge - scroll down a bit more
+      workingContainer.scrollTop += 500;
+      await sleep(1500);
+    } else {
+      noChangeRounds = 0;
+      previousCount = currentCount;
+    }
 
     // If we have enough, stop scrolling
-    if (loaded >= maxInvites) {
+    if (currentCount >= maxInvites) {
+      console.log(`[LinkedIn Inviter] Loaded enough connections (${currentCount} >= ${maxInvites})`);
       break;
     }
   }
 
-  // Scroll back to top
-  container.scrollTop = 0;
-  await sleep(500);
+  const finalCount = countInviteRows();
+  console.log(`[LinkedIn Inviter] Scrolling done. ${finalCount} total connections loaded.`);
+
+  // Scroll back to top so selection starts from the beginning
+  workingContainer.scrollTop = 0;
+  await sleep(1000);
 }
 
 // Find all unchecked checkboxes in invite-eligible rows
