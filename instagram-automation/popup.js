@@ -12,8 +12,9 @@ const DEFAULT_SETTINGS = {
   gsRetentionDays: 365,
   tags: [],
   chkFollow: true,
-  chkLike: false,
-  chkStories: false,
+  chkLike: true,
+  chkStories: true,
+  chkFollowList: true,
   pauseMinutes1: 12,
   pauseMinutes2: 60,
   pauseEvery1: 40,
@@ -28,8 +29,8 @@ const DEFAULT_SETTINGS = {
   unfollowOnPause: 20,
   unfollowAfterDays: 3,
   followListMax: 500,
-  chkFollowListLike: false,
-  chkFollowListStories: false,
+  chkFollowListLike: true,
+  chkFollowListStories: true,
   followListScrollAttempts: 5,
   unfollowDays: 3,
   chkSkipFollowBack: true,
@@ -87,7 +88,7 @@ function applySettingsToDOM(s) {
 
   const checks = [
     'chkFollow','chkLike','chkStories','chkRecentOnly',
-    'chkFollowListLike','chkFollowListStories',
+    'chkFollowList','chkFollowListLike','chkFollowListStories',
     'chkSkipFollowBack','chkUnfollowListSkipFB',
   ];
   checks.forEach(id => { if ($(id) && s[id] !== undefined) $(id).checked = s[id]; });
@@ -105,6 +106,7 @@ async function saveSettings() {
       chkFollow: $('chkFollow').checked,
       chkLike: $('chkLike').checked,
       chkStories: $('chkStories').checked,
+      chkFollowList: $('chkFollowList').checked,
       pauseMinutes1: +$('pauseMinutes1').value,
       pauseMinutes2: +$('pauseMinutes2').value,
       pauseEvery1: +$('pauseEvery1').value,
@@ -198,8 +200,18 @@ function setupEventListeners() {
   // Log clear
   $('btnClearLog').addEventListener('click', () => { $('logContent').innerHTML = ''; });
 
-  // Auto-save on input change
-  document.querySelectorAll('input, select').forEach(el => {
+  // 1-click badge update
+  ['chkFollow','chkLike','chkStories'].forEach(id => {
+    $(id)?.addEventListener('change', () => { updateOneClickBadge(0); saveSettings(); });
+  });
+  ['chkFollowList','chkFollowListLike','chkFollowListStories'].forEach(id => {
+    $(id)?.addEventListener('change', () => { updateOneClickBadge(1); saveSettings(); });
+  });
+  updateOneClickBadge(0);
+  updateOneClickBadge(1);
+
+  // Auto-save on input change (non-checkbox)
+  document.querySelectorAll('input[type="number"], select').forEach(el => {
     el.addEventListener('change', saveSettings);
   });
 }
@@ -537,6 +549,7 @@ function buildConfig() {
     followAccounts: $('chkFollow').checked,
     likePhoto: $('chkLike').checked,
     viewStories: $('chkStories').checked,
+    followListEnabled: $('chkFollowList').checked,
     pauseMinutes1: +$('pauseMinutes1').value,
     pauseMinutes2: +$('pauseMinutes2').value,
     pauseEvery1: +$('pauseEvery1').value,
@@ -579,3 +592,15 @@ async function getInstagramTab() {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function updateOneClickBadge(tabIndex) {
+  if (tabIndex === 0) {
+    const allOn = $('chkFollow')?.checked && $('chkLike')?.checked && $('chkStories')?.checked;
+    const badge = $('oneClickBadge0');
+    if (badge) badge.classList.toggle('visible', allOn);
+  } else if (tabIndex === 1) {
+    const allOn = $('chkFollowList')?.checked && $('chkFollowListLike')?.checked && $('chkFollowListStories')?.checked;
+    const badge = $('oneClickBadge1');
+    if (badge) badge.classList.toggle('visible', allOn);
+  }
+}

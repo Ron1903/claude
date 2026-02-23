@@ -95,27 +95,32 @@
       <span id="nextTagDisplay" class="badge-scanning">— waiting —</span>
     </div>
 
+    <!-- 1-click action pills (always visible) -->
+    <div class="one-click-bar">
+      <span class="one-click-label">1-click actions:</span>
+      <div class="action-pills">
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollow" checked>
+          <span class="pill-body">👥 Follow</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkLike" checked>
+          <span class="pill-body">❤️ Like photo</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkStories" checked>
+          <span class="pill-body">📖 View stories</span>
+        </label>
+      </div>
+      <span class="one-click-badge" id="oneClickBadge0">ALL-IN-ONE ✓</span>
+    </div>
+
     <!-- Settings Toggle -->
     <button class="btn-toggle-settings" id="btnToggleSettings0">
       &gt; SHOW / HIDE SETTINGS &lt;
     </button>
 
-    <div class="settings-panel" id="settingsPanel0">
-
-      <div class="form-group">
-        <label class="group-label">What to do:</label>
-        <div class="checkbox-row">
-          <label class="cb-label">
-            <input type="checkbox" id="chkFollow" checked> Follow accounts
-          </label>
-          <label class="cb-label">
-            <input type="checkbox" id="chkLike"> Like the photo
-          </label>
-          <label class="cb-label">
-            <input type="checkbox" id="chkStories"> View stories
-          </label>
-        </div>
-      </div>
+    <div class="settings-panel collapsed" id="settingsPanel0">
 
       <div class="form-group">
         <div class="inline-row">
@@ -194,9 +199,30 @@
   <div class="tab-panel" id="panel-1">
 
     <p class="tab-instruction">
-      Open the list of people that follows another Instagram account (navigate to
-      <em>instagram.com/someaccount/followers/</em>) and then click the button below.
+      Navigate to <em>instagram.com/someaccount/followers/</em> (or <em>/following/</em>),
+      open the list, then click the button below — the script will auto-follow, like &amp;
+      view stories with <strong>1 click</strong>.
     </p>
+
+    <!-- 1-click action pills for tab 1 -->
+    <div class="one-click-bar">
+      <span class="one-click-label">1-click actions:</span>
+      <div class="action-pills">
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowList" checked>
+          <span class="pill-body">👥 Follow</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowListLike" checked>
+          <span class="pill-body">❤️ Like photo</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowListStories" checked>
+          <span class="pill-body">📖 View stories</span>
+        </label>
+      </div>
+      <span class="one-click-badge" id="oneClickBadge1">ALL-IN-ONE ✓</span>
+    </div>
 
     <!-- Settings Toggle -->
     <button class="btn-toggle-settings" id="btnToggleSettings1">

@@ -49,12 +49,30 @@ class InstagramBot {
     const data = await this.getStorage();
     const state = data.automationState;
 
-    if (state && state.running && state.command === 'start') {
-      // Clear command so we don't re-trigger
-      state.command = null;
-      await this.setStorage({ automationState: state });
-      this._state = state;
-      await this.run();
+    if (state && state.running) {
+      if (state.command === 'start') {
+        // Fresh start
+        state.command = null;
+        await this.setStorage({ automationState: state });
+        this._state = state;
+        await this.run();
+      } else if (
+        state.pendingUsers?.length > 0 &&
+        (state.listIndex || 0) < state.pendingUsers.length
+      ) {
+        // Resuming the like/stories queue after a page navigation
+        this._state = state;
+        this._running = true;
+        try {
+          await this.processLikeStoriesQueue(state.config);
+        } catch (err) {
+          this.log(`Queue error: ${err.message}`, 'error');
+          console.error('[IG Bot]', err);
+          this._running = false;
+          state.running = false;
+          await this.saveState();
+        }
+      }
     }
 
     // Listen for messages from popup
@@ -318,44 +336,49 @@ class InstagramBot {
     }
   }
 
-  // ======== MODE: Follow from list ========
-  // Finds all "Follow" buttons currently visible on the page (e.g. a followers/following list)
-  // and clicks them one by one with delays. Scrolls to load more.
+  // ======== MODE: Follow from list (2-phase all-in-one) ========
+  //
+  // PHASE 1 (followers/following page):
+  //   Scrolls the list, clicks every "Follow" button, collects followed usernames.
+  //   When done, saves pendingUsers to state and kicks off Phase 2.
+  //
+  // PHASE 2 (each user's profile + stories page):
+  //   For every followed user: navigate → like latest photo → view stories → next user.
+  //   Survives page reloads — init() resumes processLikeStoriesQueue on each new page.
+  //
   async runFollowFromList() {
     const state = this._state;
     const { config } = state;
     const maxFollows = config.followListMax || 500;
     const maxScrollAttempts = config.followListScrollAttempts || 5;
 
-    this.log('Scanning for Follow buttons on this page…', 'info');
+    this.log('📋 Phase 1: scanning Follow buttons on this page…', 'info');
 
     let scrollFails = 0;
     let sessionFollows = 0;
+    const followedInSession = [];
 
+    // ---- Phase 1: click all Follow buttons ----
     while (!this._stopFlag && sessionFollows < maxFollows) {
       await this.waitWhilePaused();
 
-      // Find all "Follow" buttons that are NOT "Following" / "Requested"
       const allButtons = Array.from(document.querySelectorAll('button[type="button"]'));
       const followButtons = allButtons.filter(btn => {
-        const text = btn.textContent.trim();
-        return text === 'Follow' || text === 'עקוב';
+        const t = btn.textContent.trim();
+        return t === 'Follow' || t === 'עקוב';
       });
 
       if (followButtons.length === 0) {
-        // Try scrolling the followers modal or page
+        // Scroll the followers dialog or page to load more
         const modal = document.querySelector('div[role="dialog"]') ||
-                       document.querySelector('[style*="overflow"]');
-        if (modal) {
-          modal.scrollBy(0, 400);
-        } else {
-          window.scrollBy(0, 400);
-        }
+                      document.querySelector('[style*="overflow: hidden"]') ||
+                      document.querySelector('[style*="overflow:hidden"]');
+        if (modal) modal.scrollBy(0, 400);
+        else window.scrollBy(0, 400);
         await this.sleep(1800);
         scrollFails++;
-
         if (scrollFails >= maxScrollAttempts) {
-          this.log(`No more Follow buttons found after ${maxScrollAttempts} scroll attempts.`, 'warn');
+          this.log(`No more Follow buttons after ${maxScrollAttempts} scroll attempts.`, 'warn');
           break;
         }
         continue;
@@ -367,45 +390,164 @@ class InstagramBot {
         if (this._stopFlag || sessionFollows >= maxFollows) break;
         await this.waitWhilePaused();
 
-        // Extract username if possible (parent element often has a link)
-        const parentLink = btn.closest('li, div')?.querySelector('a[href^="/"]');
-        const hrefMatch = parentLink?.getAttribute('href')?.match(/^\/([^/]+)\/?$/);
+        // Try to extract username from surrounding DOM
+        const closestRow = btn.closest('li, [role="listitem"]') || btn.closest('div');
+        const profileLink = closestRow?.querySelector('a[href^="/"]');
+        const hrefMatch = profileLink?.getAttribute('href')?.match(/^\/([^/?#]+)\/?$/);
         const username = hrefMatch ? hrefMatch[1] : null;
 
         if (username) {
           if (await this.isBlacklisted(username)) {
-            this.log(`Skipping blacklisted: @${username}`, 'info');
+            this.log(`⛔ Skipping blacklisted: @${username}`, 'info');
             continue;
           }
-          if (await this.isAlreadyFollowedByUs(username)) {
-            continue;
-          }
+          if (await this.isAlreadyFollowedByUs(username)) continue;
         }
 
-        // Click follow
         btn.click();
         await this.sleep(1200);
 
-        // Verify it changed
         const newText = btn.textContent.trim();
-        const succeeded = newText !== 'Follow' && newText !== 'עקוב';
+        const ok = newText !== 'Follow' && newText !== 'עקוב';
 
-        if (succeeded) {
+        if (ok) {
           sessionFollows++;
           state.stats.follows++;
-          if (username) await this.recordFollow(username);
-          this.log(`Followed${username ? ' @' + username : ''} (${sessionFollows}/${maxFollows})`, 'success');
+          if (username) {
+            await this.recordFollow(username);
+            followedInSession.push(username);
+          }
+          this.log(`👥 Followed${username ? ' @' + username : ''} (${sessionFollows}/${maxFollows})`, 'success');
           await this.saveState();
         }
 
         await this.randomSleep(config.pauseMinSec, config.pauseMaxSec);
-
-        // Pause every N follows
         await this.checkPauseConditions(config);
       }
     }
 
-    this.log(`Follow from list complete. Followed: ${sessionFollows}`, 'success');
+    this.log(`✅ Phase 1 done. Followed: ${sessionFollows}`, 'success');
+
+    // ---- Phase 2: like photos + view stories ----
+    const needPhase2 = (config.followListLike || config.followListStories) &&
+                       followedInSession.length > 0;
+
+    if (needPhase2) {
+      state.pendingUsers = followedInSession;
+      state.listIndex = 0;
+      await this.saveState();
+      this.log(`❤️ Phase 2: processing ${followedInSession.length} users (like + stories)…`, 'info');
+      await this.processLikeStoriesQueue(config);
+    }
+  }
+
+  // ======== Phase 2: Like + Stories queue ========
+  // Called both from runFollowFromList() AND from init() after a page navigation.
+  async processLikeStoriesQueue(config) {
+    const state = this._state;
+    const users = state.pendingUsers || [];
+    let i = state.listIndex || 0;
+
+    if (i >= users.length) {
+      await this.completeLikeStoriesQueue();
+      return;
+    }
+
+    const username = users[i];
+    const currentUrl = window.location.href;
+    const profileUrl = `https://www.instagram.com/${username}/`;
+    const storiesUrl = `https://www.instagram.com/stories/${username}/`;
+
+    // ---- On the stories page for this user ----
+    if (currentUrl.includes(`/stories/${username}`)) {
+      await this.watchStoriesOnCurrentPage(username);
+
+      // Advance to next user
+      i++;
+      state.listIndex = i;
+      if (i < users.length) {
+        await this.saveState();
+        await this.navigateTo(`https://www.instagram.com/${users[i]}/`);
+      } else {
+        await this.completeLikeStoriesQueue();
+      }
+      return;
+    }
+
+    // ---- On the profile page for this user ----
+    if (currentUrl.includes(`/${username}`) && !currentUrl.includes('/stories/')) {
+      await this.waitForElement('main', 5000);
+      await this.sleep(1500);
+
+      // Like latest post
+      if (config.followListLike) {
+        const liked = await this.likeLatestPost();
+        if (liked) {
+          state.stats.likes++;
+          this.log(`❤️ Liked @${username}'s photo`, 'success');
+          await this.saveState();
+        }
+      }
+
+      // Navigate to stories (next sub-phase), or advance to next user
+      if (config.followListStories) {
+        await this.saveState();
+        await this.navigateTo(storiesUrl);
+      } else {
+        i++;
+        state.listIndex = i;
+        if (i < users.length) {
+          await this.saveState();
+          await this.navigateTo(`https://www.instagram.com/${users[i]}/`);
+        } else {
+          await this.completeLikeStoriesQueue();
+        }
+      }
+      return;
+    }
+
+    // ---- Not on the right page yet — navigate there ----
+    await this.saveState();
+    await this.navigateTo(profileUrl);
+  }
+
+  async watchStoriesOnCurrentPage(username) {
+    const storyEl = await this.waitForElement(
+      '[role="presentation"], [data-testid="story-viewer"]', 5000
+    );
+    if (!storyEl) {
+      this.log(`No stories for @${username}`, 'info');
+      return;
+    }
+
+    let frames = 0;
+    while (frames < 5 && !this._stopFlag) {
+      await this.sleep(4000);
+      const nextBtn = document.querySelector('[aria-label="Next"]') ||
+                      document.querySelector('button[aria-label*="next" i]');
+      if (nextBtn) {
+        nextBtn.click();
+        frames++;
+        this._state.stats.storiesViewed++;
+        await this.saveState();
+      } else {
+        break;
+      }
+    }
+    this.log(`📖 Viewed stories of @${username}`, 'success');
+  }
+
+  async completeLikeStoriesQueue() {
+    const state = this._state;
+    state.pendingUsers = [];
+    state.listIndex = 0;
+    state.running = false;
+    this._running = false;
+    await this.saveState();
+    this.log(
+      `🎉 All done! Followed: ${state.stats.follows} · Liked: ${state.stats.likes} · Stories: ${state.stats.storiesViewed}`,
+      'success'
+    );
   }
 
   // ======== MODE: Unfollow old ========

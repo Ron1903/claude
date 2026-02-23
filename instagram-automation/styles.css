@@ -306,6 +306,80 @@ textarea {
 }
 .tag-chip-remove:hover { color: var(--red); }
 
+/* =============== 1-CLICK ACTION PILLS =============== */
+.one-click-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(131,58,180,0.12), rgba(225,48,108,0.12));
+  border: 1px solid rgba(225,48,108,0.3);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.one-click-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+.action-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.action-pill {
+  cursor: pointer;
+}
+.action-pill input[type="checkbox"] {
+  display: none;
+}
+.pill-body {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  background: var(--bg3);
+  user-select: none;
+  white-space: nowrap;
+}
+.action-pill input:checked + .pill-body {
+  background: linear-gradient(135deg, rgba(131,58,180,0.3), rgba(225,48,108,0.3));
+  border-color: var(--pink);
+  color: var(--text);
+  box-shadow: 0 0 0 1px rgba(225,48,108,0.2);
+}
+.action-pill:hover .pill-body {
+  border-color: var(--pink2);
+  color: var(--text2);
+}
+.one-click-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  color: #fff;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.one-click-badge.visible {
+  opacity: 1;
+}
+
 /* =============== SETTINGS TOGGLE =============== */
 .btn-toggle-settings {
   width: 100%;
