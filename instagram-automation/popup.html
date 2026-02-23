@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instagram Automation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="20" height="20" rx="5" stroke="white" stroke-width="2"/>
+        <circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>
+        <circle cx="17.5" cy="6.5" r="1" fill="white"/>
+      </svg>
+      Instagram Automation
+    </div>
+    <div class="header-version">v1.0</div>
+  </div>
+
+  <!-- Global Settings -->
+  <div class="global-settings">
+    <div class="gs-item">
+      <label>Random pause:</label>
+      <input type="number" id="gsPauseMin" value="2" min="1" max="60">
+      <span>to</span>
+      <input type="number" id="gsPauseMax" value="3" min="1" max="60">
+      <span>sec between clicks</span>
+    </div>
+    <div class="gs-item">
+      <label>Save followed for:</label>
+      <input type="number" id="gsRetentionDays" value="365" min="1" max="3650">
+      <span>days</span>
+    </div>
+    <button id="btnBlacklist" class="btn-outline">⛔ Blacklist</button>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot idle" id="statusDot"></div>
+    <span id="statusText">Ready — open Instagram in a tab to begin</span>
+    <div class="status-stats" id="statusStats"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="0">Follow by tag/loc<br><small>and/or VIEW stories</small></button>
+    <button class="tab-btn" data-tab="1">Follow<br><small>from list</small></button>
+    <button class="tab-btn" data-tab="2">Unfollow<br><small>after N days</small></button>
+    <button class="tab-btn" data-tab="3">Unfollow<br><small>from list</small></button>
+  </div>
+
+  <!-- ======= TAB 0: Follow by tag/loc ======= -->
+  <div class="tab-panel active" id="panel-0">
+
+    <div class="form-row">
+      <label>Add tags / locations:</label>
+      <div class="input-add-row">
+        <input type="text" id="tagInput" placeholder="#fashion or loc:tel-aviv">
+        <button id="btnAddTag" class="btn-add">+</button>
+      </div>
+    </div>
+
+    <div class="tags-list" id="tagsList">
+      <!-- Tag chips rendered here -->
+    </div>
+
+    <div class="form-row" id="nextTagRow" style="display:none">
+      <label>Scanning next:</label>
+      <span id="nextTagDisplay" class="badge-info">—</span>
+    </div>
+
+    <!-- Settings Toggle -->
+    <button class="btn-toggle-settings" id="btnToggleSettings">
+      <span id="settingsToggleIcon">▼</span> SHOW / HIDE SETTINGS
+    </button>
+
+    <div class="settings-panel" id="settingsPanel">
+
+      <div class="form-group">
+        <label class="group-label">What to do:</label>
+        <div class="checkbox-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkFollow" checked> Follow accounts
+          </label>
+          <label class="cb-label">
+            <input type="checkbox" id="chkLike"> Like the photo
+          </label>
+          <label class="cb-label">
+            <input type="checkbox" id="chkStories"> View stories
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Pause for</span>
+          <input type="number" id="pauseMinutes1" value="12" min="1" class="inp-sm">
+          <span>&amp;</span>
+          <input type="number" id="pauseMinutes2" value="60" min="1" class="inp-sm">
+          <span>(±20%) min every</span>
+          <input type="number" id="pauseEvery1" value="40" min="1" class="inp-sm">
+          <span>&amp;</span>
+          <input type="number" id="pauseEvery2" value="200" min="1" class="inp-sm">
+          <span>follows</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Stop after</span>
+          <input type="number" id="maxFollows" value="5000" min="1" class="inp-md">
+          <span>follows or</span>
+          <input type="number" id="maxStories" value="20000" min="1" class="inp-md">
+          <span>story views</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Pause</span>
+          <input type="number" id="serverErrorPause" value="5" min="1" class="inp-sm">
+          <span>(±20%) min if server rejects click</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkRecentOnly" checked>
+            Scan photos posted in last
+          </label>
+          <input type="number" id="scanMonths" value="24" min="1" class="inp-sm">
+          <span>months only</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Next tag / reload page after</span>
+          <input type="number" id="nextTagMinutes" value="120" min="1" class="inp-sm">
+          <span>min or</span>
+          <input type="number" id="nextTagFollows" value="200" min="1" class="inp-sm">
+          <span>follows</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>On pause/change, unfollow</span>
+          <input type="number" id="unfollowOnPause" value="20" min="0" class="inp-sm">
+          <span>users followed &gt;</span>
+          <input type="number" id="unfollowAfterDays" value="3" min="1" class="inp-sm">
+          <span>days ago</span>
+        </div>
+      </div>
+
+    </div><!-- /settingsPanel -->
+  </div><!-- /panel-0 -->
+
+  <!-- ======= TAB 1: Follow from list ======= -->
+  <div class="tab-panel" id="panel-1">
+    <div class="form-group">
+      <label>Usernames to follow (one per line, without @):</label>
+      <textarea id="followList" rows="10" placeholder="username1&#10;username2&#10;username3"></textarea>
+    </div>
+    <div class="form-group">
+      <div class="inline-row">
+        <label class="cb-label">
+          <input type="checkbox" id="chkFollowListLike"> Like latest post too
+        </label>
+        <label class="cb-label">
+          <input type="checkbox" id="chkFollowListStories"> View stories too
+        </label>
+      </div>
+    </div>
+    <div class="list-stats" id="followListStats">0 usernames loaded</div>
+  </div>
+
+  <!-- ======= TAB 2: Unfollow old ======= -->
+  <div class="tab-panel" id="panel-2">
+    <div class="form-group">
+      <label class="group-label">Unfollow users you followed more than N days ago:</label>
+      <div class="inline-row">
+        <span>Unfollow after</span>
+        <input type="number" id="unfollowDays" value="3" min="1" class="inp-sm">
+        <span>days</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="inline-row">
+        <label class="cb-label">
+          <input type="checkbox" id="chkSkipFollowBack"> Skip users who follow you back
+        </label>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="inline-row">
+        <span>Max unfollow per session:</span>
+        <input type="number" id="maxUnfollowSession" value="200" min="1" class="inp-md">
+      </div>
+    </div>
+    <div class="list-stats" id="unfollowOldStats">Loading...</div>
+  </div>
+
+  <!-- ======= TAB 3: Unfollow from list ======= -->
+  <div class="tab-panel" id="panel-3">
+    <div class="form-group">
+      <label>Usernames to unfollow (one per line, without @):</label>
+      <textarea id="unfollowList" rows="10" placeholder="username1&#10;username2&#10;username3"></textarea>
+    </div>
+    <div class="list-stats" id="unfollowListStats">0 usernames loaded</div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="action-bar">
+    <button id="btnRun" class="btn-run">▶ Run selected options</button>
+    <button id="btnPause" class="btn-pause" disabled>⏸ Pause</button>
+    <button id="btnStop" class="btn-stop" disabled>⏹ Stop</button>
+  </div>
+
+  <!-- Log -->
+  <div class="log-panel">
+    <div class="log-header">
+      <span>Activity Log</span>
+      <button id="btnClearLog" class="btn-link">Clear</button>
+    </div>
+    <div id="logContent" class="log-content"></div>
+  </div>
+
+  <!-- Blacklist Modal -->
+  <div class="modal-overlay" id="blacklistModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>⛔ Blacklist</h3>
+        <button id="btnCloseModal" class="btn-link">✕</button>
+      </div>
+      <p class="modal-desc">Users in this list will never be followed (one username per line, without @):</p>
+      <textarea id="blacklistText" rows="12" placeholder="username1&#10;username2"></textarea>
+      <div class="modal-actions">
+        <button id="btnSaveBlacklist" class="btn-run">Save</button>
+        <button id="btnCancelBlacklist" class="btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
