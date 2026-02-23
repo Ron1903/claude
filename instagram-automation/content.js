@@ -309,15 +309,7 @@ class InstagramBot {
         }
 
         // Pause every N follows
-        const follows = state.stats.follows;
-        const inPauseWindow1 = config.pauseEvery1 && follows > 0 && follows % config.pauseEvery1 === 0;
-        const inPauseWindow2 = config.pauseEvery2 && follows > 0 && follows % config.pauseEvery2 === 0;
-        if (inPauseWindow1 || inPauseWindow2) {
-          const minutes = inPauseWindow2 ? config.pauseMinutes2 : config.pauseMinutes1;
-          const pauseMs = this.withVariance(minutes * 60000, 0.2);
-          this.log(`Pause break: ${Math.round(pauseMs / 60000)} min after ${follows} follows`, 'warn');
-          await this.sleep(pauseMs);
-        }
+        await this.checkPauseConditions(config);
       }
 
       // Scroll for more
@@ -327,57 +319,93 @@ class InstagramBot {
   }
 
   // ======== MODE: Follow from list ========
+  // Finds all "Follow" buttons currently visible on the page (e.g. a followers/following list)
+  // and clicks them one by one with delays. Scrolls to load more.
   async runFollowFromList() {
     const state = this._state;
     const { config } = state;
-    const list = config.followList || [];
-    if (list.length === 0) {
-      this.log('Follow list is empty', 'error');
-      return;
-    }
+    const maxFollows = config.followListMax || 500;
+    const maxScrollAttempts = config.followListScrollAttempts || 5;
 
-    for (let i = state.listIndex || 0; i < list.length; i++) {
-      if (this._stopFlag) break;
+    this.log('Scanning for Follow buttons on this page…', 'info');
+
+    let scrollFails = 0;
+    let sessionFollows = 0;
+
+    while (!this._stopFlag && sessionFollows < maxFollows) {
       await this.waitWhilePaused();
 
-      state.listIndex = i;
-      const username = list[i];
+      // Find all "Follow" buttons that are NOT "Following" / "Requested"
+      const allButtons = Array.from(document.querySelectorAll('button[type="button"]'));
+      const followButtons = allButtons.filter(btn => {
+        const text = btn.textContent.trim();
+        return text === 'Follow' || text === 'עקוב';
+      });
 
-      // Check blacklist
-      if (await this.isBlacklisted(username)) {
-        this.log(`Skipping blacklisted: @${username}`, 'info');
+      if (followButtons.length === 0) {
+        // Try scrolling the followers modal or page
+        const modal = document.querySelector('div[role="dialog"]') ||
+                       document.querySelector('[style*="overflow"]');
+        if (modal) {
+          modal.scrollBy(0, 400);
+        } else {
+          window.scrollBy(0, 400);
+        }
+        await this.sleep(1800);
+        scrollFails++;
+
+        if (scrollFails >= maxScrollAttempts) {
+          this.log(`No more Follow buttons found after ${maxScrollAttempts} scroll attempts.`, 'warn');
+          break;
+        }
         continue;
       }
 
-      // Navigate to profile
-      await this.navigateTo(`https://www.instagram.com/${username}/`);
-      await this.sleep(2500);
+      scrollFails = 0;
 
-      // Follow
-      const followed = await this.clickFollowOnProfile();
-      if (followed) {
-        state.stats.follows++;
-        await this.recordFollow(username);
-        this.log(`Followed @${username}`, 'success');
-        await this.saveState();
-      }
+      for (const btn of followButtons) {
+        if (this._stopFlag || sessionFollows >= maxFollows) break;
+        await this.waitWhilePaused();
 
-      // Like latest post
-      if (config.followListLike) {
-        const liked = await this.likeLatestPost();
-        if (liked) {
-          state.stats.likes++;
-          this.log(`Liked latest post of @${username}`, 'success');
+        // Extract username if possible (parent element often has a link)
+        const parentLink = btn.closest('li, div')?.querySelector('a[href^="/"]');
+        const hrefMatch = parentLink?.getAttribute('href')?.match(/^\/([^/]+)\/?$/);
+        const username = hrefMatch ? hrefMatch[1] : null;
+
+        if (username) {
+          if (await this.isBlacklisted(username)) {
+            this.log(`Skipping blacklisted: @${username}`, 'info');
+            continue;
+          }
+          if (await this.isAlreadyFollowedByUs(username)) {
+            continue;
+          }
         }
-      }
 
-      // View stories
-      if (config.followListStories) {
-        await this.viewUserStories(username, config);
-      }
+        // Click follow
+        btn.click();
+        await this.sleep(1200);
 
-      await this.randomSleep(config.pauseMinSec, config.pauseMaxSec);
+        // Verify it changed
+        const newText = btn.textContent.trim();
+        const succeeded = newText !== 'Follow' && newText !== 'עקוב';
+
+        if (succeeded) {
+          sessionFollows++;
+          state.stats.follows++;
+          if (username) await this.recordFollow(username);
+          this.log(`Followed${username ? ' @' + username : ''} (${sessionFollows}/${maxFollows})`, 'success');
+          await this.saveState();
+        }
+
+        await this.randomSleep(config.pauseMinSec, config.pauseMaxSec);
+
+        // Pause every N follows
+        await this.checkPauseConditions(config);
+      }
     }
+
+    this.log(`Follow from list complete. Followed: ${sessionFollows}`, 'success');
   }
 
   // ======== MODE: Unfollow old ========
@@ -416,23 +444,46 @@ class InstagramBot {
   async runUnfollowFromList() {
     const state = this._state;
     const { config } = state;
-    const list = config.unfollowList || [];
-    if (list.length === 0) {
-      this.log('Unfollow list is empty', 'error');
+    const maxSession = config.maxUnfollowListSession || 200;
+    const skipFB = config.unfollowListSkipFB || false;
+
+    // Build unfollow list from stored followed users
+    const data = await this.getStorage();
+    const storedUsers = (data.followedUsers || [])
+      .filter(u => !u.unfollowedAt)
+      .slice(0, maxSession);
+
+    if (storedUsers.length === 0) {
+      this.log('No users in saved list to unfollow.', 'warn');
       return;
     }
 
-    for (let i = state.listIndex || 0; i < list.length; i++) {
+    this.log(`Unfollowing ${storedUsers.length} users from list…`, 'info');
+
+    for (let i = state.listIndex || 0; i < storedUsers.length; i++) {
       if (this._stopFlag) break;
       await this.waitWhilePaused();
 
       state.listIndex = i;
-      const username = list[i];
+      const user = storedUsers[i];
 
-      await this.unfollowUser(username, false);
+      await this.unfollowUser(user.username, skipFB);
       state.stats.unfollows++;
       await this.saveState();
       await this.randomSleep(config.pauseMinSec, config.pauseMaxSec);
+    }
+  }
+
+  // ======== Pause Conditions Helper ========
+  async checkPauseConditions(config) {
+    const follows = this._state?.stats?.follows || 0;
+    const p1 = config.pauseEvery1 && follows > 0 && follows % config.pauseEvery1 === 0;
+    const p2 = config.pauseEvery2 && follows > 0 && follows % config.pauseEvery2 === 0;
+    if (p1 || p2) {
+      const minutes = p2 ? config.pauseMinutes2 : config.pauseMinutes1;
+      const pauseMs = this.withVariance(minutes * 60000, 0.2);
+      this.log(`Scheduled pause: ${Math.round(pauseMs / 60000)} min after ${follows} follows`, 'warn');
+      await this.sleep(pauseMs);
     }
   }
 
