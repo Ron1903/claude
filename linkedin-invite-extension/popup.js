@@ -40,6 +40,44 @@ function updateProgress(current, total, phase) {
   text.textContent = phase + ' - ' + current + '/' + total + ' (' + pct + '%)';
 }
 
+// Inject the content script and then send the start command
+async function injectAndStart(tab) {
+  try {
+    // Always inject the content script fresh to make sure it's loaded
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['content.js']
+    });
+  } catch (e) {
+    console.log('Injection note:', e.message);
+    // Script may already be injected, continue anyway
+  }
+
+  // Wait for script to initialize
+  await new Promise(r => setTimeout(r, 1000));
+
+  // Try sending the message up to 3 times
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'START_INVITE',
+        count: selectedCount
+      });
+      if (response && response.ok) {
+        console.log('Start command sent successfully');
+        return true;
+      }
+    } catch (e) {
+      console.log(`Attempt ${attempt} failed:`, e.message);
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+  }
+
+  return false;
+}
+
 // Start button
 document.getElementById('startBtn').addEventListener('click', async () => {
   const startBtn = document.getElementById('startBtn');
@@ -57,39 +95,29 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     return;
   }
 
-  // Send message to content script to start
-  chrome.tabs.sendMessage(tab.id, {
-    action: 'START_INVITE',
-    count: selectedCount
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      // Content script might not be loaded yet, inject it
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-      }, () => {
-        // Retry after injection
-        setTimeout(() => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'START_INVITE',
-            count: selectedCount
-          });
-        }, 500);
-      });
-    }
-  });
-
   // Show stop button
   startBtn.style.display = 'none';
   stopBtn.style.display = 'block';
-  showStatus('מתחיל...', 'info');
+  showStatus('מזריק סקריפט ומתחיל...', 'info');
+
+  const success = await injectAndStart(tab);
+  if (!success) {
+    showStatus('לא הצלחתי להתחבר לעמוד. נסה לרענן את הדף ולנסות שוב', 'error');
+    stopBtn.style.display = 'none';
+    startBtn.style.display = 'block';
+    startBtn.disabled = false;
+  }
 });
 
 // Stop button
 document.getElementById('stopBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) {
-    chrome.tabs.sendMessage(tab.id, { action: 'STOP_INVITE' });
+    try {
+      await chrome.tabs.sendMessage(tab.id, { action: 'STOP_INVITE' });
+    } catch (e) {
+      console.log('Stop error:', e.message);
+    }
   }
 
   document.getElementById('stopBtn').style.display = 'none';

@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Page Inviter",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Auto-invite connections to follow your LinkedIn business page",
   "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["https://www.linkedin.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
