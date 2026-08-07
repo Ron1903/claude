@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instagram Automation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="20" height="20" rx="5" stroke="white" stroke-width="2"/>
+        <circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>
+        <circle cx="17.5" cy="6.5" r="1.5" fill="white"/>
+      </svg>
+      Instagram Automation
+    </div>
+    <div class="header-right">
+      <div class="header-version">v1.0</div>
+    </div>
+  </div>
+
+  <!-- Info Banner -->
+  <div class="info-banner">
+    Using this extension you can follow people from the list or from tags/locations and unfollow them after some time.
+    <strong class="text-danger">Do not switch accounts to not mix the list of followed people.
+    Just use different browsers for different accounts.</strong>
+  </div>
+
+  <!-- Global Settings -->
+  <div class="global-settings">
+    <div class="gs-item">
+      <label>Random pause:</label>
+      <input type="number" id="gsPauseMin" value="2" min="1" max="60">
+      <span>to</span>
+      <input type="number" id="gsPauseMax" value="3" min="1" max="60">
+      <span>sec between clicks</span>
+    </div>
+    <div class="gs-divider"></div>
+    <div class="gs-item">
+      <label>Save followed for:</label>
+      <input type="number" id="gsRetentionDays" value="365" min="1" max="3650">
+      <span>days</span>
+    </div>
+    <div class="gs-divider"></div>
+    <button id="btnBlacklist" class="btn-outline-sm">⛔ Blacklist</button>
+    <button id="btnReset" class="btn-outline-sm btn-reset-link">↺ Reset</button>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot idle" id="statusDot"></div>
+    <span id="statusText">Ready — open Instagram in a tab to begin</span>
+    <div class="status-stats" id="statusStats"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="0">
+      <span class="tab-num">1</span>
+      <span class="tab-label">Follow by tag/loc<br><small>and/or VIEW stories</small></span>
+    </button>
+    <button class="tab-btn" data-tab="1">
+      <span class="tab-num">2</span>
+      <span class="tab-label">Follow<br><small>from list</small></span>
+    </button>
+    <button class="tab-btn" data-tab="2">
+      <span class="tab-num">3</span>
+      <span class="tab-label">Unfollow<br><small>after N days</small></span>
+    </button>
+    <button class="tab-btn" data-tab="3">
+      <span class="tab-num">4</span>
+      <span class="tab-label">Unfollow<br><small>from list</small></span>
+    </button>
+  </div>
+
+  <!-- ======= TAB 0: Follow by tag/loc ======= -->
+  <div class="tab-panel active" id="panel-0">
+
+    <div class="form-row">
+      <label class="form-label">Add tags / locations:</label>
+      <div class="input-add-row">
+        <input type="text" id="tagInput" placeholder="#fashion, #travel or loc:tel-aviv">
+        <button id="btnAddTag" class="btn-add">+</button>
+      </div>
+    </div>
+
+    <div class="tags-list" id="tagsList"></div>
+
+    <div class="form-row" id="nextTagRow" style="display:none">
+      <label class="form-label">Scanning next:</label>
+      <span id="nextTagDisplay" class="badge-scanning">— waiting —</span>
+    </div>
+
+    <!-- 1-click action pills (always visible) -->
+    <div class="one-click-bar">
+      <span class="one-click-label">1-click actions:</span>
+      <div class="action-pills">
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollow" checked>
+          <span class="pill-body">👥 Follow</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkLike" checked>
+          <span class="pill-body">❤️ Like photo</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkStories" checked>
+          <span class="pill-body">📖 View stories</span>
+        </label>
+      </div>
+      <span class="one-click-badge" id="oneClickBadge0">ALL-IN-ONE ✓</span>
+    </div>
+
+    <!-- Settings Toggle -->
+    <button class="btn-toggle-settings" id="btnToggleSettings0">
+      &gt; SHOW / HIDE SETTINGS &lt;
+    </button>
+
+    <div class="settings-panel collapsed" id="settingsPanel0">
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Pause for</span>
+          <input type="number" id="pauseMinutes1" value="12" min="1" class="inp-sm">
+          <span>&amp;</span>
+          <input type="number" id="pauseMinutes2" value="60" min="1" class="inp-sm">
+          <span>(±20%) min every</span>
+          <input type="number" id="pauseEvery1" value="40" min="1" class="inp-sm">
+          <span>&amp;</span>
+          <input type="number" id="pauseEvery2" value="200" min="1" class="inp-sm">
+          <span>follows</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Stop after</span>
+          <input type="number" id="maxFollows" value="5000" min="1" class="inp-md">
+          <span>follows or</span>
+          <input type="number" id="maxStories" value="20000" min="1" class="inp-md">
+          <span>story views</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Pause</span>
+          <input type="number" id="serverErrorPause" value="5" min="1" class="inp-sm">
+          <span>(±20%) min if server rejects click</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkRecentOnly" checked>
+            Scan photos posted in last
+          </label>
+          <input type="number" id="scanMonths" value="24" min="1" class="inp-sm">
+          <span>months only</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Go to next tag / reload after</span>
+          <input type="number" id="nextTagMinutes" value="120" min="1" class="inp-sm">
+          <span>min or</span>
+          <input type="number" id="nextTagFollows" value="200" min="1" class="inp-sm">
+          <span>follows</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>On pause/tag change, unfollow</span>
+          <input type="number" id="unfollowOnPause" value="20" min="0" class="inp-sm">
+          <span>users followed &gt;</span>
+          <input type="number" id="unfollowAfterDays" value="3" min="1" class="inp-sm">
+          <span>days ago</span>
+        </div>
+      </div>
+
+    </div><!-- /settingsPanel0 -->
+
+    <!-- Tab 0 Action Button -->
+    <button class="btn-action-pink" id="btnRunFollowTag">
+      ▶ Run selected options
+    </button>
+
+  </div><!-- /panel-0 -->
+
+
+  <!-- ======= TAB 1: Follow from list ======= -->
+  <div class="tab-panel" id="panel-1">
+
+    <p class="tab-instruction">
+      Navigate to <em>instagram.com/someaccount/followers/</em> (or <em>/following/</em>),
+      open the list, then click the button below — the script will auto-follow, like &amp;
+      view stories with <strong>1 click</strong>.
+    </p>
+
+    <!-- 1-click action pills for tab 1 -->
+    <div class="one-click-bar">
+      <span class="one-click-label">1-click actions:</span>
+      <div class="action-pills">
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowList" checked>
+          <span class="pill-body">👥 Follow</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowListLike" checked>
+          <span class="pill-body">❤️ Like photo</span>
+        </label>
+        <label class="action-pill">
+          <input type="checkbox" id="chkFollowListStories" checked>
+          <span class="pill-body">📖 View stories</span>
+        </label>
+      </div>
+      <span class="one-click-badge" id="oneClickBadge1">ALL-IN-ONE ✓</span>
+    </div>
+
+    <!-- Settings Toggle -->
+    <button class="btn-toggle-settings" id="btnToggleSettings1">
+      &gt; SHOW / HIDE SETTINGS &lt;
+    </button>
+
+    <div class="settings-panel collapsed" id="settingsPanel1">
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Max follows per session:</span>
+          <input type="number" id="followListMax" value="500" min="1" class="inp-md">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkFollowListLike"> Like latest post too
+          </label>
+          <label class="cb-label">
+            <input type="checkbox" id="chkFollowListStories"> View stories too
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Stop if no new Follow buttons for</span>
+          <input type="number" id="followListScrollAttempts" value="5" min="1" class="inp-sm">
+          <span>scroll attempts</span>
+        </div>
+      </div>
+
+    </div><!-- /settingsPanel1 -->
+
+    <!-- Tab 1 Action Button -->
+    <button class="btn-action-green" id="btnRunFollowList">
+      Click all &lsquo;Follow&rsquo; buttons
+    </button>
+
+    <div class="list-stats" id="followListStats">Navigate to a followers/following page, then click the button above.</div>
+
+  </div><!-- /panel-1 -->
+
+
+  <!-- ======= TAB 2: Unfollow after N days ======= -->
+  <div class="tab-panel" id="panel-2">
+
+    <!-- Settings Toggle -->
+    <button class="btn-toggle-settings" id="btnToggleSettings2">
+      &gt; SHOW / HIDE SETTINGS &lt;
+    </button>
+
+    <div class="settings-panel collapsed" id="settingsPanel2">
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Unfollow users followed more than</span>
+          <input type="number" id="unfollowDays" value="3" min="1" class="inp-sm">
+          <span>days ago</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkSkipFollowBack" checked> Skip users who follow you back
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Max unfollow per session:</span>
+          <input type="number" id="maxUnfollowSession" value="200" min="1" class="inp-md">
+        </div>
+      </div>
+
+    </div><!-- /settingsPanel2 -->
+
+    <!-- Stats line -->
+    <div class="unfollow-stats-box" id="unfollowOldStats">
+      <span>People in your list: <strong id="totalFollowedCount">0</strong></span>
+      <span class="stats-divider">·</span>
+      <span>Added more than <strong id="unfollowDaysDisplay">3</strong> days ago:
+        <strong id="eligibleUnfollowCount" class="text-accent">0</strong>
+      </span>
+      <button class="btn-refresh-stats" id="btnRefreshStats" title="Refresh">↻</button>
+    </div>
+
+    <!-- Tab 2 Action Button -->
+    <button class="btn-action-pink" id="btnRunUnfollowOld">
+      Unfollow people followed by this script
+    </button>
+
+  </div><!-- /panel-2 -->
+
+
+  <!-- ======= TAB 3: Unfollow from list ======= -->
+  <div class="tab-panel" id="panel-3">
+
+    <!-- Settings Toggle -->
+    <button class="btn-toggle-settings" id="btnToggleSettings3">
+      &gt; SHOW / HIDE SETTINGS &lt;
+    </button>
+
+    <div class="settings-panel collapsed" id="settingsPanel3">
+
+      <div class="form-group">
+        <div class="inline-row">
+          <span>Max unfollow per session:</span>
+          <input type="number" id="maxUnfollowListSession" value="200" min="1" class="inp-md">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="inline-row">
+          <label class="cb-label">
+            <input type="checkbox" id="chkUnfollowListSkipFB"> Skip users who follow you back
+          </label>
+        </div>
+      </div>
+
+    </div><!-- /settingsPanel3 -->
+
+    <!-- Tab 3 Action Button -->
+    <button class="btn-action-pink" id="btnRunUnfollowList">
+      Unfollow people from the list
+    </button>
+
+    <!-- Export link -->
+    <div class="export-box">
+      Do you want to export your current following list (max 1000)?
+      <a href="#" id="btnExportFollowed" class="link-accent">Open it and <strong>click here</strong></a>.
+    </div>
+
+    <div class="list-stats" id="unfollowListStats">0 usernames in saved list</div>
+
+  </div><!-- /panel-3 -->
+
+
+  <!-- Pause / Stop controls -->
+  <div class="control-bar">
+    <button id="btnPause" class="btn-pause" disabled>⏸ Pause</button>
+    <button id="btnStop" class="btn-stop" disabled>⏹ Stop</button>
+  </div>
+
+  <!-- Log -->
+  <div class="log-panel">
+    <div class="log-header">
+      <span>Activity Log</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="logStatsLine" class="log-stats-line"></span>
+        <button id="btnClearLog" class="btn-link">Clear</button>
+      </div>
+    </div>
+    <div id="logContent" class="log-content"></div>
+  </div>
+
+  <!-- Bottom Warnings -->
+  <div class="bottom-warnings">
+    <p class="warn-block">
+      <strong class="text-danger">Do not use the script for 24 hours and run it in just 1 tab,</strong>
+      it simulates human clicks, so you cannot use it more than 12h in a day.
+      Also, if you never followed before, start with small numbers (follow may be limited for 24h,
+      same as for Facebook).
+      <strong class="text-danger">If something is not working, that means that the design of IG was
+      changed — let us know and we will fix it! :)</strong>
+    </p>
+    <p class="warn-block">
+      We save people you followed with our script, so you can unfollow them in the same order.
+    </p>
+    <p class="warn-block">
+      <a href="#" id="btnResetLink" class="link-muted">Reset default settings.</a>
+      &nbsp;·&nbsp;
+      <a href="https://www.instagram.com/" target="_blank" class="link-muted">See video example.</a>
+      &nbsp;
+      <strong>Do you have more accounts?</strong>
+      Download Chrome Beta and Chrome Canary. Now you can login to 3 browsers with different
+      profiles and run the script in each.
+    </p>
+    <p class="warn-block text-danger-soft">
+      <strong>DO NOT enable Google Sync</strong> if you use same account on more PCs
+      (Google bug in recent Chrome versions — it may reset saved info during syncing).
+    </p>
+  </div>
+
+  <!-- ======= Blacklist Modal ======= -->
+  <div class="modal-overlay" id="blacklistModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>⛔ Blacklist</h3>
+        <button id="btnCloseModal" class="btn-link">✕</button>
+      </div>
+      <p class="modal-desc">Users in this list will never be followed (one username per line, without @):</p>
+      <textarea id="blacklistText" rows="12" placeholder="username1&#10;username2"></textarea>
+      <div class="modal-footer-stats" id="blacklistStats">0 entries</div>
+      <div class="modal-actions">
+        <button id="btnSaveBlacklist" class="btn-action-pink" style="flex:1">Save</button>
+        <button id="btnCancelBlacklist" class="btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= Reset Confirm Modal ======= -->
+  <div class="modal-overlay" id="resetModal">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3>↺ Reset Settings</h3>
+        <button id="btnCloseResetModal" class="btn-link">✕</button>
+      </div>
+      <p class="modal-desc">This will reset all settings to defaults. Your followed-users list and blacklist will be kept.</p>
+      <div class="modal-actions">
+        <button id="btnConfirmReset" class="btn-action-pink" style="flex:1">Reset Settings</button>
+        <button id="btnCancelReset" class="btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
